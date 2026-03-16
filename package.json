@@ -1,0 +1,21 @@
+{
+  "name": "imhashem",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/ImHashem",
+    "packages/example-app"
+  ],
+  "scripts": {
+    "dev": "bun run --cwd packages/example-app dev",
+    "build": "bun run --cwd packages/example-app build",
+    "start": "bun run --cwd packages/example-app start",
+    "test": "bun test packages/ImHashem/src"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  }
+}
