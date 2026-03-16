@@ -1,5 +1,6 @@
 import { join, basename } from "node:path";
 import type { Route } from "./router";
+import { generateEntry, cleanGeneratedEntries } from "./entry-generator";
 
 export interface BundleResult {
   route: Route;
@@ -17,11 +18,18 @@ export async function bundleRoutes(
   routes: Route[],
   outDir: string, // where on disk to write files
   publicPath: string = "/bundles", // what URL prefix to use
+  layoutDir: string | null = null, // path to layout folder if exists
+  // PROFESSIONAL: appRoot tells the bundler where the developer's app lives.
+  // Generated entry files and .gitignore are placed here, not in the framework.
+  // Simple alternative: hardcode a path — breaks for every different project.
+  appRoot: string
 ): Promise<BundleResult[]> {
   const results: BundleResult[] = [];
 
-  // Professional: derive it from a named variable — self documenting,
-  // reusable across the whole bundler, change it in one place
+  // PROFESSIONAL: derive environment once outside the loop —
+  // process.env.NODE_ENV never changes during a single build run.
+  // Simple alternative: inline ternary inside Bun.build() — works but
+  // repeating the check per route is wasteful and harder to read.
   const isDev: boolean = process.env.NODE_ENV !== "production";
 
   for (const route of routes) {
@@ -30,10 +38,25 @@ export async function bundleRoutes(
     // Simple alternative would be to always bundle something — wasteful.
     if (!route.hasClient) continue;
 
-    const clientFile = join(route.dir, "page.client.tsx");
+    // check if this route's layout has a client file
+    // layout client is optional — not every layout needs interactivity
+    const hasLayoutClient = layoutDir
+      ? await Bun.file(join(layoutDir, "layout.client.tsx")).exists()
+      : false;
+
+    // PROFESSIONAL: generate a real entry file that handles hydrateRoot,
+    // HMR, StrictMode, and layout merging — developer never writes this.
+    // Simple alternative: bundle page.client.tsx directly — loses HMR
+    // state preservation and layout client support.
+    const { entryFile } = await generateEntry(
+      route,
+      hasLayoutClient,
+      hasLayoutClient ? layoutDir : null,
+      appRoot
+    );
 
     const result = await Bun.build({
-      entrypoints: [clientFile],
+      entrypoints: [entryFile],
       outdir: outDir,
       target: "browser",
 
@@ -43,23 +66,12 @@ export async function bundleRoutes(
       // Hashing gives every bundle a unique name AND enables cache busting —
       // when the file content changes, the hash changes, so browsers
       // automatically re-download instead of serving stale cached JS.
-      // also this helps security by making it impossible to guess the URL of a bundle without first building it, so attackers can't target specific bundles with attacks like cache poisoning.
       // This is what Next.js, Vite, and every serious bundler does.
-      naming: {
-        // [name]  = original filename without extension (page.client)
-        // [hash]  = content hash, changes when file content changes
-        // [ext]   = extension (js)
-        // result: page.client-a1b2c3.js
-        entry: "[name]-[hash].[ext]",
-        chunk: "[name]-[hash].[ext]",
-        asset: "[name]-[hash].[ext]",
-      },
+      naming: "[name]-[hash].[ext]",
 
       // PROFESSIONAL: minify automatically based on environment.
       // Simple alternative: hardcode false — but then production
       // ships unminified JS which is larger and slower to download.
-      // process.env.NODE_ENV is "production" when running bun start,
-      // and undefined/development when running bun dev.
       minify: !isDev,
 
       // PROFESSIONAL: source maps in development only.
@@ -84,17 +96,22 @@ export async function bundleRoutes(
     // so there will always be exactly one output file.
     const outFile = result.outputs[0]!.path;
 
+    // PROFESSIONAL: basename() handles both Windows (\) and Unix (/) paths.
+    // Simple alternative: split("/").at(-1) — breaks on Windows.
+    const fileName = basename(outFile);
+
     // Derive the public URL from the output filename.
     // The browser doesn't know about the filesystem — it only
     // knows URLs. So "/bundles/page.client-a1b2c3.js" is what
     // gets injected into the <script> tag.
-    // Simple alternative: hardcode the path — breaks if outDir changes.
-    const fileName = basename(outFile);
-
-    const publicUrl = `${publicPath}/${fileName}`; // e.g. "/bundles/page.client-a1b2c3.js"
+    const publicUrl = `${publicPath}/${fileName}`;
 
     results.push({ route, outFile, publicUrl });
   }
+
+  // PROFESSIONAL: in dev keep generated entries for faster HMR rebuilds.
+  // In production clean up immediately — no leftover files in deployment.
+  await cleanGeneratedEntries(isDev, appRoot);
 
   return results;
 }
