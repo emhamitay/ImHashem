@@ -3,49 +3,39 @@ import { join } from "node:path";
 
 export interface Route {
   urlPath: string; // e.g. "/", "/about", "/blog/:id"
-  dir: string; // absolute path to the route folder for bunlder to watch
+  dir: string; // absolute path to the route folder
   hasClient: boolean;
   hasShared: boolean;
   params: string[]; // e.g. ["id"] for /blog/:id
 }
 
-// helper to check if a file exists without throwing
-// (Bun.file(path).exists() is not reliable because it returns false for directories, so we need to check if it's a file)
-// this is used to check for page.client.tsx and page.shared.tsx
 async function fileExists(path: string): Promise<boolean> {
   return Bun.file(path).exists();
 }
 
-// recursively scan the routes directory and build a route map
-// routesDir — the caller passes in the path to their routes folder, e.g. "./src/routes".
+// scans the routes directory recursively and returns a list of routes
 export async function buildRouteMap(routesDir: string): Promise<Route[]> {
   const routes: Route[] = [];
 
-  /*
-    Inner function defined inside buildRouteMap. 
-    Being inside means it has direct access to routes — it 
-    can push into it without us passing it around. 
-    dir is the current folder on disk. urlPrefix is the URL built 
-    so far — starts as "/" and grows as we go deeper.
-  */
+  // inner recursive function — has direct access to `routes` so we don't need to pass it around
+  // dir = current folder on disk, urlPrefix = URL built so far (starts as "/")
   async function scanDir(dir: string, urlPrefix: string) {
-    const entries = await readdir(dir, { withFileTypes: true }); // readdir lists everything in dir
+    const entries = await readdir(dir, { withFileTypes: true });
 
     for (const entry of entries) {
-      //We only care about folders because routes live in folders. Files sitting directly in the routes folder (like maybe a utils.ts) are ignored.
+      // routes live in folders — ignore any loose files
       if (!entry.isDirectory()) continue;
 
       const folderName = entry.name; // e.g. "index", "about", "[id]"
-      const folderPath = join(dir, folderName); // absolute path to the folder on disk
+      const folderPath = join(dir, folderName);
 
-      // dynamic route: [id] → :id
+      // convert [id] → :id for dynamic segments
       const urlSegment =
         folderName.startsWith("[") && folderName.endsWith("]")
           ? `:${folderName.slice(1, -1)}`
           : folderName;
 
-      // e.g. urlPrefix = "/" + urlSegment = "about" → "/about"
-      /// special case for index: urlPrefix = "/" + urlSegment = "index" → "/"
+      // build the URL path — "index" folder is special, it maps to "/"
       const urlPath =
         urlPrefix === "/"
           ? folderName === "index"
@@ -53,16 +43,14 @@ export async function buildRouteMap(routesDir: string): Promise<Route[]> {
             : `/${urlSegment}`
           : `${urlPrefix}/${urlSegment}`;
 
-      // only register route if page.server.tsx exists
-      const serverExists = await fileExists(
-        join(folderPath, "page.server.tsx"),
-      );
+      // only register this folder as a route if it has a page.server.tsx
+      const serverExists = await fileExists(join(folderPath, "page.server.tsx"));
       if (!serverExists) {
         await scanDir(folderPath, urlPath);
         continue;
       }
 
-      // "/blog/:id/:slug" → ["id", "slug"]
+      // extract param names from the URL — "/blog/:id/:slug" → ["id", "slug"]
       const params = urlPath
         .split("/")
         .filter((segment) => segment.startsWith(":"))

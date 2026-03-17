@@ -1,8 +1,17 @@
-//import { serve } from "bun";
-//import index from "./index.html";
-import { buildRouteMap } from "../../ImHashem/src/index"
+import { imhashem } from "imhashem";
 import { join } from "node:path";
 
-const routes = await buildRouteMap(join(import.meta.dir, "routes"));
+const app = await imhashem({
+  routesDir: join(import.meta.dir, "routes"),
+  appRoot: import.meta.dir,
+});
 
-//console.log(`🚀 Server running at ${server.url}`);
+const server = Bun.serve({
+  routes: app.routes,
+  development: process.env.NODE_ENV !== "production" && {
+    hmr: true,
+    console: true,
+  },
+});
+
+console.log(`🚀 ImHashem running at ${server.url}`);

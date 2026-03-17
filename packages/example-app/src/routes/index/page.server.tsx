@@ -1,8 +1,9 @@
 export default async function Page() {
   return (
     <div>
-      <h1>Home</h1>
-      <p>Welcome to ImHashem framework!</p>
+      <h1>Welcome to ImHashem</h1>
+      <p>This content was rendered on the server.</p>
+      TESTING HMR
     </div>
   );
 }

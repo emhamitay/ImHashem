@@ -109,11 +109,12 @@ describe("generateEntry", () => {
     expect(content).toContain("import.meta.hot");
   });
 
-  it("generated content contains hydrateRoot for production path", async () => {
+  it("generated content uses createRoot for production path (no hydration — server never renders the client component)", async () => {
     const route = makeRoute("/", join(TEST_DIR, "index"));
     const result = await generateEntry(route, false, null, TEST_DIR);
     const content = await Bun.file(result.entryFile).text();
-    expect(content).toContain("hydrateRoot");
+    expect(content).toContain("createRoot");
+    expect(content).not.toContain("hydrateRoot");
   });
 
   it("generated content uses forward slashes in import paths on Windows", async () => {
