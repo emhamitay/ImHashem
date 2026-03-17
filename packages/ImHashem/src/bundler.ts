@@ -12,7 +12,6 @@ export async function bundleRoutes(
   routes: Route[],
   outDir: string,              // where on disk to write the bundle files
   publicPath: string = "/bundles", // URL prefix injected into the <script> tag
-  layoutDir: string | null = null, // layout folder path if one exists
   appRoot: string              // developer's app root — generated entries go here
 ): Promise<BundleResult[]> {
   const results: BundleResult[] = [];
@@ -24,19 +23,9 @@ export async function bundleRoutes(
     // server-only routes have no client file — skip them, send zero JS to the browser
     if (!route.hasClient) continue;
 
-    // layout.client.tsx is optional — not every layout needs interactivity
-    const hasLayoutClient = layoutDir
-      ? await Bun.file(join(layoutDir, "layout.client.tsx")).exists()
-      : false;
-
     // generate the entry file that wraps the developer's component with
     // hydrateRoot, HMR, and StrictMode — developer never writes this
-    const { entryFile } = await generateEntry(
-      route,
-      hasLayoutClient,
-      hasLayoutClient ? layoutDir : null,
-      appRoot
-    );
+    const { entryFile } = await generateEntry(route, appRoot);
 
     const result = await Bun.build({
       entrypoints: [entryFile],

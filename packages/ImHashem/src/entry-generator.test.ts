@@ -18,13 +18,11 @@ beforeAll(async () => {
   await mkdir(join(TEST_DIR, "index"), { recursive: true });
   await mkdir(join(TEST_DIR, "about"), { recursive: true });
   await mkdir(join(TEST_DIR, "blog-id"), { recursive: true });
-  await mkdir(join(TEST_DIR, "layout"), { recursive: true });
 
   // minimal page client files so imports in the generated content are valid paths
   await writeFile(join(TEST_DIR, "index", "page.client.tsx"), "export default function Page() { return null; }");
   await writeFile(join(TEST_DIR, "about", "page.client.tsx"), "export default function Page() { return null; }");
   await writeFile(join(TEST_DIR, "blog-id", "page.client.tsx"), "export default function Page() { return null; }");
-  await writeFile(join(TEST_DIR, "layout", "layout.client.tsx"), "export default function Layout({ children }: any) { return children; }");
 });
 
 afterAll(async () => {
@@ -36,13 +34,13 @@ afterAll(async () => {
 describe("generateEntry", () => {
   it("returns the correct route back", async () => {
     const route = makeRoute("/", join(TEST_DIR, "index"));
-    const result = await generateEntry(route, false, null, TEST_DIR);
+    const result = await generateEntry(route, TEST_DIR);
     expect(result.route).toBe(route);
   });
 
   it("creates the .imhashem/generated directory", async () => {
     const route = makeRoute("/", join(TEST_DIR, "index"));
-    await generateEntry(route, false, null, TEST_DIR);
+    await generateEntry(route, TEST_DIR);
     let exists = true;
     try { await access(join(TEST_DIR, ".imhashem", "generated")); } catch { exists = false; }
     expect(exists).toBe(true);
@@ -50,76 +48,61 @@ describe("generateEntry", () => {
 
   it("names the entry file 'index.entry.tsx' for the root route", async () => {
     const route = makeRoute("/", join(TEST_DIR, "index"));
-    const result = await generateEntry(route, false, null, TEST_DIR);
+    const result = await generateEntry(route, TEST_DIR);
     expect(result.entryFile).toEndWith("index.entry.tsx");
   });
 
   it("names the entry file after the url path for non-root routes", async () => {
     const route = makeRoute("/about", join(TEST_DIR, "about"));
-    const result = await generateEntry(route, false, null, TEST_DIR);
+    const result = await generateEntry(route, TEST_DIR);
     expect(result.entryFile).toEndWith("about.entry.tsx");
   });
 
   it("converts slashes to dashes and strips colons for dynamic routes", async () => {
     const route = makeRoute("/blog/:id", join(TEST_DIR, "blog-id"));
-    const result = await generateEntry(route, false, null, TEST_DIR);
+    const result = await generateEntry(route, TEST_DIR);
     expect(result.entryFile).toEndWith("blog-id.entry.tsx");
   });
 
   it("writes the entry file to disk", async () => {
     const route = makeRoute("/about", join(TEST_DIR, "about"));
-    const result = await generateEntry(route, false, null, TEST_DIR);
+    const result = await generateEntry(route, TEST_DIR);
     const exists = await Bun.file(result.entryFile).exists();
     expect(exists).toBe(true);
   });
 
   it("generated content imports PageClient", async () => {
     const route = makeRoute("/", join(TEST_DIR, "index"));
-    const result = await generateEntry(route, false, null, TEST_DIR);
+    const result = await generateEntry(route, TEST_DIR);
     const content = await Bun.file(result.entryFile).text();
     expect(content).toContain('import PageClient from');
   });
 
-  it("generated content does NOT import LayoutClient when hasLayout is false", async () => {
+  it("generated content does NOT import LayoutClient", async () => {
     const route = makeRoute("/", join(TEST_DIR, "index"));
-    const result = await generateEntry(route, false, null, TEST_DIR);
+    const result = await generateEntry(route, TEST_DIR);
     const content = await Bun.file(result.entryFile).text();
     expect(content).not.toContain("LayoutClient");
   });
 
-  it("generated content imports LayoutClient when hasLayout is true", async () => {
+  it("generated content uses hydrateRoot", async () => {
     const route = makeRoute("/", join(TEST_DIR, "index"));
-    const result = await generateEntry(route, true, join(TEST_DIR, "layout"), TEST_DIR);
+    const result = await generateEntry(route, TEST_DIR);
     const content = await Bun.file(result.entryFile).text();
-    expect(content).toContain('import LayoutClient from');
+    expect(content).toContain("hydrateRoot");
   });
 
-  it("generated content wraps PageClient inside LayoutClient when layout is present", async () => {
+  it("generated content wraps PageClient in StrictMode", async () => {
     const route = makeRoute("/", join(TEST_DIR, "index"));
-    const result = await generateEntry(route, true, join(TEST_DIR, "layout"), TEST_DIR);
+    const result = await generateEntry(route, TEST_DIR);
     const content = await Bun.file(result.entryFile).text();
-    expect(content).toContain("createElement(LayoutClient");
+    expect(content).toContain("createElement(StrictMode");
     expect(content).toContain("createElement(PageClient");
-  });
-
-  it("generated content contains HMR guard (import.meta.hot)", async () => {
-    const route = makeRoute("/", join(TEST_DIR, "index"));
-    const result = await generateEntry(route, false, null, TEST_DIR);
-    const content = await Bun.file(result.entryFile).text();
-    expect(content).toContain("import.meta.hot");
-  });
-
-  it("generated content uses createRoot for production path (no hydration — server never renders the client component)", async () => {
-    const route = makeRoute("/", join(TEST_DIR, "index"));
-    const result = await generateEntry(route, false, null, TEST_DIR);
-    const content = await Bun.file(result.entryFile).text();
-    expect(content).toContain("createRoot");
-    expect(content).not.toContain("hydrateRoot");
   });
 
   it("generated content uses forward slashes in import paths on Windows", async () => {
     const route = makeRoute("/", join(TEST_DIR, "index"));
-    const result = await generateEntry(route, false, null, TEST_DIR);
+    const result = await generateEntry(route, TEST_DIR);
     const content = await Bun.file(result.entryFile).text();
     // import path must never contain backslashes
     const importLine = content.split("\n").find(l => l.startsWith("import PageClient"));

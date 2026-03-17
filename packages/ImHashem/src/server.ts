@@ -33,7 +33,7 @@ export async function imhashem(options: ImHashemOptions): Promise<ImHashemApp> {
   const routeList = await buildRouteMap(routesDir);
 
   // bundle client files and get back the public URLs
-  const bundleResults = await bundleRoutes(routeList, outDir, publicPath, null, appRoot);
+  const bundleResults = await bundleRoutes(routeList, outDir, publicPath, appRoot);
   const bundleMap = new Map<string, BundleResult>(
     bundleResults.map((b) => [b.route.urlPath, b])
   );

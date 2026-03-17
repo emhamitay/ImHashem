@@ -22,17 +22,6 @@ export default function PageClient() {
 }
 `.trim();
 
-const LAYOUT_CLIENT_CONTENT = `
-export default function LayoutClient({ children }: { children: React.ReactNode }) {
-  return (
-    <div>
-      <nav>Nav</nav>
-      {children}
-    </div>
-  );
-}
-`.trim();
-
 const routes: Route[] = [
   {
     urlPath: "/",
@@ -61,12 +50,10 @@ beforeAll(async () => {
   await mkdir(join(TEST_DIR, "index"), { recursive: true });
   await mkdir(join(TEST_DIR, "about"), { recursive: true });
   await mkdir(join(TEST_DIR, "blog"), { recursive: true });
-  await mkdir(join(TEST_DIR, "layout"), { recursive: true });
   await mkdir(OUT_DIR, { recursive: true });
 
   await writeFile(join(TEST_DIR, "index", "page.client.tsx"), CLIENT_FILE_CONTENT);
   await writeFile(join(TEST_DIR, "blog", "page.client.tsx"), CLIENT_FILE_CONTENT);
-  await writeFile(join(TEST_DIR, "layout", "layout.client.tsx"), LAYOUT_CLIENT_CONTENT);
 });
 
 afterAll(async () => {
@@ -76,12 +63,12 @@ afterAll(async () => {
 
 describe("bundleRoutes", () => {
   it("only bundles routes that have a client file", async () => {
-    const results = await bundleRoutes(routes, OUT_DIR, "/bundles", null, TEST_DIR);
+    const results = await bundleRoutes(routes, OUT_DIR, "/bundles", TEST_DIR);
     expect(results.length).toBe(2);
   });
 
   it("result contains correct routes", async () => {
-    const results = await bundleRoutes(routes, OUT_DIR, "/bundles", null, TEST_DIR);
+    const results = await bundleRoutes(routes, OUT_DIR, "/bundles", TEST_DIR);
     const urlPaths = results.map(r => r.route.urlPath);
     expect(urlPaths).toContain("/");
     expect(urlPaths).toContain("/blog");
@@ -89,7 +76,7 @@ describe("bundleRoutes", () => {
   });
 
   it("outFile exists on disk after bundling", async () => {
-    const results = await bundleRoutes(routes, OUT_DIR, "/bundles", null, TEST_DIR);
+    const results = await bundleRoutes(routes, OUT_DIR, "/bundles", TEST_DIR);
     for (const result of results) {
       const exists = await Bun.file(result.outFile).exists();
       expect(exists).toBe(true);
@@ -97,21 +84,21 @@ describe("bundleRoutes", () => {
   });
 
   it("outFile is a .js file", async () => {
-    const results = await bundleRoutes(routes, OUT_DIR, "/bundles", null, TEST_DIR);
+    const results = await bundleRoutes(routes, OUT_DIR, "/bundles", TEST_DIR);
     for (const result of results) {
       expect(result.outFile.endsWith(".js")).toBe(true);
     }
   });
 
   it("publicUrl starts with /bundles by default", async () => {
-    const results = await bundleRoutes(routes, OUT_DIR, "/bundles", null, TEST_DIR);
+    const results = await bundleRoutes(routes, OUT_DIR, "/bundles", TEST_DIR);
     for (const result of results) {
       expect(result.publicUrl.startsWith("/bundles")).toBe(true);
     }
   });
 
   it("publicUrl contains a hash", async () => {
-    const results = await bundleRoutes(routes, OUT_DIR, "/bundles", null, TEST_DIR);
+    const results = await bundleRoutes(routes, OUT_DIR, "/bundles", TEST_DIR);
     for (const result of results) {
       // hashed: index.entry-a1b2c3.js
       // simple: index.entry.js
@@ -120,27 +107,16 @@ describe("bundleRoutes", () => {
   });
 
   it("each route gets a unique bundle", async () => {
-    const results = await bundleRoutes(routes, OUT_DIR, "/bundles", null, TEST_DIR);
+    const results = await bundleRoutes(routes, OUT_DIR, "/bundles", TEST_DIR);
     const urls = results.map(r => r.publicUrl);
-    // PROFESSIONAL: Set removes duplicates — if sizes match, all are unique
+    // Set removes duplicates — if sizes match, all are unique
     expect(new Set(urls).size).toBe(urls.length);
   });
 
   it("respects custom publicPath", async () => {
-    const results = await bundleRoutes(routes, OUT_DIR, "/static/js", null, TEST_DIR);
+    const results = await bundleRoutes(routes, OUT_DIR, "/static/js", TEST_DIR);
     for (const result of results) {
       expect(result.publicUrl.startsWith("/static/js")).toBe(true);
     }
-  });
-
-  it("bundles layout client when layoutDir is provided", async () => {
-    const results = await bundleRoutes(
-      routes,
-      OUT_DIR,
-      "/bundles",
-      join(TEST_DIR, "layout"),
-      TEST_DIR
-    );
-    expect(results.length).toBe(2);
   });
 });
